@@ -82,6 +82,9 @@ type SidecarSetSpec struct {
 
 	// SidecarSet support to inject & in-place update metadata in pod.
 	PatchPodMetadata []SidecarSetPatchPodMetadata `json:"patchPodMetadata,omitempty"`
+	
+	// ShareProcessNamespace indicates whether the sidecar container shares the process namespace with the main container.
+	ShareProcessNamespace bool `json:"shareProcessNamespace,omitempty"`
 }
 
 type SidecarSetPatchPodMetadata struct {

@@ -165,10 +165,47 @@ func (h *PodCreateHandler) sidecarsetMutatingPod(ctx context.Context, req admiss
 	for k, v := range injectedAnnotations {
 		pod.Annotations[k] = v
 	}
+	// 6. apply securityContext
+	mutatePodSpecOtherThanContainers(pod, matchedSidecarSets[0].GetSidecarset())
 	klog.V(4).InfoS("after mutating", "func", "sidecar inject", "pod", klog.KObj(pod))
 	return false, nil
 }
 
+func mutatePodSpecOtherThanContainers(pod *corev1.Pod, sidecarSet *appsv1alpha1.SidecarSet) {
+	if sidecarSet.Spec.ShareProcessNamespace {
+		pod.Spec.ShareProcessNamespace = &sidecarSet.Spec.ShareProcessNamespace
+		if pod.Spec.Containers[1].SecurityContext == nil {
+			pod.Spec.Containers[1].SecurityContext = &corev1.SecurityContext{
+				Capabilities: &corev1.Capabilities{
+					Add: []corev1.Capability{corev1.Capability("SYS_PTRACE")},
+				},
+			}
+			return
+		} 
+		s := sidecarSet.Spec.Containers[0].SecurityContext
+		if s.Capabilities != nil {
+			if !containsCapability(s.Capabilities.Add, corev1.Capability("SYS_PTRACE")) {
+				s.Capabilities.Add = append(s.Capabilities.Add, corev1.Capability("SYS_PTRACE"))
+			}
+		} else {
+			s.Capabilities = &corev1.Capabilities{
+				Add: []corev1.Capability{corev1.Capability("SYS_PTRACE")},
+			}
+		}
+	}
+}
+
+func containsCapability(capabilities []corev1.Capability, capability corev1.Capability) bool {
+	if capabilities == nil {
+		return false
+	}
+	for _, c := range capabilities {
+		if c == capability {
+			return true
+		}
+	}
+	return false
+}
 func (h *PodCreateHandler) getSuitableRevisionSidecarSet(sidecarSet *appsv1alpha1.SidecarSet, oldPod, newPod *corev1.Pod, operation admissionv1.Operation) (*appsv1alpha1.SidecarSet, error) {
 	switch operation {
 	case admissionv1.Update:
